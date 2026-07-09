@@ -26,7 +26,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "Chassis.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -103,13 +103,39 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_USB_Init();
   /* USER CODE BEGIN 2 */
-
+  SysTick_Config(SystemCoreClock / 1000);  /* 1 kHz SysTick */
+  Chassis_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    /* ---- 测试：前进 300mm ---- */
+    Chassis_Move(300.0f);
+    while (Chassis_IsBusy());
+    HAL_Delay(1000);
+
+    /* ---- 测试：左转 90° ---- */
+    Chassis_Rotate(90.0f);
+    while (Chassis_IsBusy());
+    HAL_Delay(1000);
+
+    /* ---- 测试：右转 90° ---- */
+    Chassis_Rotate(-90.0f);
+    while (Chassis_IsBusy());
+    HAL_Delay(1000);
+
+    /* ---- 测试：后退 300mm ---- */
+    Chassis_Move(-300.0f);
+    while (Chassis_IsBusy());
+    HAL_Delay(2000);
+
+    /* 结束测试循环 */
+    while (1)
+    {
+      HAL_Delay(1000);
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
