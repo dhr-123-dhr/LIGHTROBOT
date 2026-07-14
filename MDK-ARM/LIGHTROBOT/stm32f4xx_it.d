@@ -34,3 +34,5 @@ lightrobot\stm32f4xx_it.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim
 lightrobot\stm32f4xx_it.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h
 lightrobot\stm32f4xx_it.o: ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h
 lightrobot\stm32f4xx_it.o: ../Core/Inc/stm32f4xx_it.h
+lightrobot\stm32f4xx_it.o: ../Core/Inc/MotorCtrl.h
+lightrobot\stm32f4xx_it.o: ../Core/Inc/tim.h
