@@ -5,16 +5,16 @@
 #include "MotorCtrl.h"
 
 /* ---- 底盘机械参数 (按实际结构修改) ------------------------------ */
-#define WHEEL_DIAMETER      65.0f     /* 轮径 D (mm)                 */
-#define WHEEL_TRACK         150.0f    /* 轮距 L (mm)                 */
+#define WHEEL_DIAMETER      85.0f     /* 轮径 D (mm)                 */
+#define WHEEL_TRACK         82.0f    /* 轮距 L (mm)                 */
 #define STEPS_PER_REV       3200      /* 每圈步数 (1.8°, 16细分)     */
 #define PI                  3.14159265f
 
 /* ---- 步数计算宏 ------------------------------------------------ */
 /* 直线距离 → 步数 */
 #define DIST_TO_STEPS(d_mm)  ((d_mm) / (PI * WHEEL_DIAMETER) * (float)STEPS_PER_REV)
-/* 旋转角度 → 步数 (差速旋转，两轮反向各走一半) */
-#define ANGLE_TO_STEPS(deg)  ((deg) / 360.0f * PI * WHEEL_TRACK / (PI * WHEEL_DIAMETER) * (float)STEPS_PER_REV)
+/* 旋转角度 → 步数 (差速旋转，两轮反向各走一半，约分 PI) */
+#define ANGLE_TO_STEPS(deg)  ((deg) / 360.0f * WHEEL_TRACK / WHEEL_DIAMETER * (float)STEPS_PER_REV)
 
 /* API ------------------------------------------------------------ */
 void Chassis_Init(void);

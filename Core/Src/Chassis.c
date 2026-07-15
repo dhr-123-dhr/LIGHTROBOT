@@ -1,6 +1,10 @@
 #include "Chassis.h"
 #include "MotorCtrl.h"
 
+extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
+extern MotorCtrl_t motor[2];
+
 /* 初始化底盘 ------------------------------------------------------ */
 void Chassis_Init(void)
 {

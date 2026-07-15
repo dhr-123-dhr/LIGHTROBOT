@@ -103,7 +103,6 @@ int main(void)
   MX_USART6_UART_Init();
   MX_USB_OTG_FS_USB_Init();
   /* USER CODE BEGIN 2 */
-  SysTick_Config(SystemCoreClock / 1000);  /* 1 kHz SysTick */
   Chassis_Init();
   /* USER CODE END 2 */
 
