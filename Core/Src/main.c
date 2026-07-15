@@ -82,10 +82,10 @@ int main(void)
   /* USER CODE END Init */
 
   /* Configure the system clock */
-  SystemClock_Config();
+SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+HAL_Delay(3000);		
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
@@ -104,37 +104,28 @@ int main(void)
   MX_USB_OTG_FS_USB_Init();
   /* USER CODE BEGIN 2 */
   Chassis_Init();
+enum {MOVE1, MOVE2};
+uint8_t demo_state = MOVE1;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* ---- 测试：前进 300mm ---- */
-    Chassis_Move(300.0f);
-    while (Chassis_IsBusy());
-    HAL_Delay(1000);
-
-    /* ---- 测试：左转 90° ---- */
-    Chassis_Rotate(90.0f);
-    while (Chassis_IsBusy());
-    HAL_Delay(1000);
-
-    /* ---- 测试：右转 90° ---- */
-    Chassis_Rotate(-90.0f);
-    while (Chassis_IsBusy());
-    HAL_Delay(1000);
-
-    /* ---- 测试：后退 300mm ---- */
-    Chassis_Move(-300.0f);
-    while (Chassis_IsBusy());
-    HAL_Delay(2000);
-
-    /* 结束测试循环 */
-    while (1)
-    {
-      HAL_Delay(1000);
+  switch(demo_state)
+    { 
+      case MOVE1:
+        Chassis_Move(500.0f);
+        while (Chassis_IsBusy()) {}    /* 等待运动完成 */
+        demo_state = MOVE2;
+        break;
+      case MOVE2:
+        Chassis_Rotate(90.0f);
+        while (Chassis_IsBusy()) {}    /* 等待运动完成 */
+        demo_state = MOVE1; 
+        break;
     }
+    
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -163,8 +154,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 25;
-  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)

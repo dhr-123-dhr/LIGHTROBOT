@@ -13,8 +13,8 @@
 /* ---- 步数计算宏 ------------------------------------------------ */
 /* 直线距离 → 步数 */
 #define DIST_TO_STEPS(d_mm)  ((d_mm) / (PI * WHEEL_DIAMETER) * (float)STEPS_PER_REV)
-/* 旋转角度 → 步数 (差速旋转，两轮反向各走一半，约分 PI) */
-#define ANGLE_TO_STEPS(deg)  ((deg) / 360.0f * WHEEL_TRACK / WHEEL_DIAMETER * (float)STEPS_PER_REV)
+/* 旋转角度 → 步数 (差速旋转: arc = r × θ, r=WHEEL_TRACK=转弯半径, 弧长/轮周长×每圈步数) */
+#define ANGLE_TO_STEPS(deg)  ((deg) / 180.0f * WHEEL_TRACK / WHEEL_DIAMETER * (float)STEPS_PER_REV)
 
 /* API ------------------------------------------------------------ */
 void Chassis_Init(void);

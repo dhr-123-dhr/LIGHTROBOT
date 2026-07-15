@@ -21,10 +21,7 @@
 #include <math.h>
 
 MotorCtrl_t motor[2];
-
-/* PWM 已启动标志 -------------------------------------------------- */
-static uint8_t pwm_started[2] = {0, 0};
-
+		
 /* 内部辅助: 取绝对值 ---------------------------------------------- */
 static float fabsf_local(float v)
 {
@@ -76,8 +73,15 @@ void MotorCtrl_Start(uint8_t motor_id, float target_steps, uint8_t direction)
     m->target_steps = target_steps;
     m->current_steps = 0.0f;
     m->direction = direction;
-    m->last_speed = 0.0f;
-    m->current_speed = MIN_SPEED;  /* 从 MIN_SPEED 起步, 跳过低速死区 */
+    /* 短距离限幅: 目标很近时自动降起始速度, 防止冲出目标 (Robot scurve) */
+    {
+        float v0 = MIN_SPEED;
+        float v_short = sqrtf(2.0f * MAX_ACCEL * target_steps * 0.4f);
+        if (v_short < v0) v0 = v_short;
+        if (v0 < 1.0f) v0 = 1.0f;
+        m->last_speed    = v0;
+        m->current_speed = v0;
+    }
     m->current_accel = MAX_ACCEL;
     m->pending_cnt = 0;
     m->state = ACCEL;
@@ -86,12 +90,8 @@ void MotorCtrl_Start(uint8_t motor_id, float target_steps, uint8_t direction)
     HAL_GPIO_WritePin(m->dir_port, m->dir_pin,
                       direction ? GPIO_PIN_RESET : GPIO_PIN_SET);
 
-    /* 预启动 PWM */
-    if (!pwm_started[motor_id])
-    {
-        HAL_TIM_PWM_Start(m->htim, m->channel);
-        pwm_started[motor_id] = 1;
-    }
+    /* 无条件启动 PWM (HAL_TIM_PWM_Start 幂等, 重复调用无害) */
+    HAL_TIM_PWM_Start(m->htim, m->channel);
 }
 
 /* 软停止: CCR=0, 等脉冲完结后关定时器 ----------------------------- */
@@ -129,7 +129,6 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
         if (m->pending_cnt >= 3)
         {
             HAL_TIM_PWM_Stop(m->htim, m->channel);
-            pwm_started[id] = 0;
             m->state = STOP;
         }
         return;
@@ -147,28 +146,26 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
         return;
     }
 
-    /* ---- 梯形减速判据: v²/(2a) ---- */
-    decel_req = (m->current_speed * m->current_speed) / (2.0f * MAX_ACCEL);
+    /* ---- 梯形减速判据: v²/(2a) + 0.5·v·dt (Robot scurve 裕量, 提前触发) ---- */
+    decel_req = (m->current_speed * m->current_speed) / (2.0f * MAX_ACCEL)
+              + 0.5f * m->current_speed * dt;
 
-    /* ---- 状态切换判断 ---- */
-    if (remaining > decel_req)
+    /* ---- 状态切换判断 (单向: DECEL 不再切回 ACCEL/CONST_SPEED, 防止震荡)
+     *     Robot scurve 的正确做法: 只在 ACCEL 状态才允许加速到限速切匀速.
+     *     一旦进入 DECEL 就保持减速直到终点, 不因数值抖动切回加速. ---- */
+    if (remaining <= decel_req)
     {
-        if (m->current_speed < MAX_SPEED)
-        {
-            m->state = ACCEL;
-            m->current_accel = MAX_ACCEL;
-        }
-        else
-        {
-            m->state = CONST_SPEED;
-            m->current_accel = 0.0f;
-        }
-    }
-    else
-    {
+        /* 减速判据满足 → 无条件切减速 (ACCEL/CONST_SPEED 均可切入) */
         m->state = DECEL;
         m->current_accel = -MAX_ACCEL;
     }
+    else if (m->state == ACCEL && m->current_speed >= MAX_SPEED)
+    {
+        /* 仅 ACCEL 状态允许切到匀速 */
+        m->state = CONST_SPEED;
+        m->current_accel = 0.0f;
+    }
+    /* else: 保持当前状态 (ACCEL 继续加速 或 CONST_SPEED 保持匀速) */
 
     /* ---- 计算目标速度 (梯形规划) ---- */
     target_speed = m->current_speed + m->current_accel * dt;
@@ -179,6 +176,18 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
     if (d_abs > MAX_DELTA_SPEED)
     {
         target_speed = m->last_speed + (delta < 0.0f ? -MAX_DELTA_SPEED : MAX_DELTA_SPEED);
+    }
+
+    /* ---- 减速过零死锁保护 (Robot scurve) ----
+     * DECEL 段 speed 降至 0 以下: 离散残差导致 speed 卡在 MIN_SPEED
+     * 而 remaining>0 永远无法结束, 此处直接钳到目标停车 */
+    if (m->state == DECEL && target_speed <= 0.0f)
+    {
+        m->current_steps = m->target_steps;
+        m->current_speed = 0.0f;
+        m->current_accel = 0.0f;
+        MotorCtrl_Stop(id);
+        return;
     }
 
     /* ---- 速度钳位 ---- */
@@ -200,11 +209,15 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
     }
 
     /* ---- 速度 → PWM 频率 (ARR = TIMER_CLK / speed - 1) ----
-     * 借鉴 Robot stepper.c: 写入影子寄存器 (ARPE + OCxPE 已在 Init 使能)
-     * 不写 UG, 不重置 CNT, 硬件在溢出时自动装载新值 */
+     * 写入影子寄存器 (ARPE + OCxPE 已在 Init 使能)
+     * 不写 UG, 不重置 CNT, 硬件在溢出时自动装载新值
+     * 
+     * 临界区保护: 主循环可能调用 MotorCtrl_Start/Stop 修改定时器,
+     * 与 ISR 并发写 ARR/CCR 导致寄存器竞争. 
+     * 此处关全局中断保护定时器寄存器操作原子性. */
     arr = (uint32_t)(TIMER_CLK_HZ / m->current_speed);
-    /* 安全钳位: ARR 至少 2 (保证 50% 占空比有整数解 CCR=1) */
-    if (arr < 2)  arr = 2;
+    /* 安全钳位: ARR 至少 3, 保证 arr-1 ≥ 2, CCR ≥ 1, 避免 PWM 恒低无脉冲 */
+    if (arr < 3)  arr = 3;
     /* 16 位定时器上限 */
     if (arr > 65535) arr = 65535;
 
@@ -213,10 +226,14 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
 
     ccr = arr >> 1;  /* 50% 占空比 */
 
+    /* 关全局中断: 保护定时器寄存器原子写入,
+     * 避免与主循环 MotorCtrl_Start/Stop 竞争 */
+    __disable_irq();
     /* 写入影子寄存器 (HAL 宏直接写 TIMx->ARR / TIMx->CCRx)
      * ARPE=1 → 下次溢出时自动加载到活动寄存器 */
     __HAL_TIM_SET_AUTORELOAD(m->htim, arr);
     __HAL_TIM_SET_COMPARE(m->htim, m->channel, ccr);
+    __enable_irq();
 }
 
 /* 更新所有电机 (SysTick 中断中调用) -------------------------------- */

@@ -1,10 +1,6 @@
 #include "Chassis.h"
 #include "MotorCtrl.h"
 
-extern TIM_HandleTypeDef htim2;
-extern TIM_HandleTypeDef htim3;
-extern MotorCtrl_t motor[2];
-
 /* 初始化底盘 ------------------------------------------------------ */
 void Chassis_Init(void)
 {
@@ -51,18 +47,9 @@ uint8_t Chassis_IsBusy(void)
     return MotorCtrl_IsBusy(MOTOR_LEFT) || MotorCtrl_IsBusy(MOTOR_RIGHT);
 }
 
-/* 紧急停止 -------------------------------------------------------- */
+/* 紧急停止 (走 MotorCtrl_Stop 软件流程, 由状态机安全关断) */
 void Chassis_EmergencyStop(void)
 {
-    /* 左轮 */
-    HAL_TIM_PWM_Stop(&htim2, TIM_CHANNEL_1);
-    motor[MOTOR_LEFT].state         = STOP;
-    motor[MOTOR_LEFT].current_speed = 0.0f;
-    motor[MOTOR_LEFT].current_accel = 0.0f;
-
-    /* 右轮 */
-    HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
-    motor[MOTOR_RIGHT].state         = STOP;
-    motor[MOTOR_RIGHT].current_speed = 0.0f;
-    motor[MOTOR_RIGHT].current_accel = 0.0f;
+    MotorCtrl_Stop(MOTOR_LEFT);
+    MotorCtrl_Stop(MOTOR_RIGHT);
 }
