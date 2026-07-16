@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "dma.h"
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
@@ -82,7 +83,7 @@ int main(void)
   /* USER CODE END Init */
 
   /* Configure the system clock */
-SystemClock_Config();
+  SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
 HAL_Delay(3000);		
@@ -90,6 +91,7 @@ HAL_Delay(3000);
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_I2C3_Init();
@@ -115,7 +117,7 @@ uint8_t demo_state = MOVE1;
   switch(demo_state)
     { 
       case MOVE1:
-        Chassis_Move(500.0f);
+        Chassis_Move(2000.0f);
         while (Chassis_IsBusy()) {}    /* 等待运动完成 */
         demo_state = MOVE2;
         break;
