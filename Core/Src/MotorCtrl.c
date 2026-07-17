@@ -39,7 +39,6 @@ void MotorCtrl_Init(void)
     motor[MOTOR_LEFT].target_steps = 0.0f;
     motor[MOTOR_LEFT].current_steps = 0.0f;
     motor[MOTOR_LEFT].direction = 0;
-    motor[MOTOR_LEFT].pending_cnt = 0;
     motor[MOTOR_LEFT].htim = &htim2;
     motor[MOTOR_LEFT].channel = TIM_CHANNEL_1;
     motor[MOTOR_LEFT].dir_port = GPIOA;
@@ -53,7 +52,6 @@ void MotorCtrl_Init(void)
     motor[MOTOR_RIGHT].target_steps = 0.0f;
     motor[MOTOR_RIGHT].current_steps = 0.0f;
     motor[MOTOR_RIGHT].direction = 0;
-    motor[MOTOR_RIGHT].pending_cnt = 0;
     motor[MOTOR_RIGHT].htim = &htim3;
     motor[MOTOR_RIGHT].channel = TIM_CHANNEL_1;
     motor[MOTOR_RIGHT].dir_port = GPIOC;
@@ -83,30 +81,38 @@ void MotorCtrl_Start(uint8_t motor_id, float target_steps, uint8_t direction)
         m->current_speed = v0;
     }
     m->current_accel = MAX_ACCEL;
-    m->pending_cnt = 0;
     m->state = ACCEL;
 
     /* 设置方向引脚: 0=正转(SET), 1=反转(RESET) */
     HAL_GPIO_WritePin(m->dir_port, m->dir_pin,
                       direction ? GPIO_PIN_RESET : GPIO_PIN_SET);
 
+    /* 先写初始 ARR/CCR, 再启动 PWM (对齐 Robot stepper.c 做法)
+     * 防止第一拍脉冲使用上次残留的旧 ARR 值导致起步丢步 */
+    {
+        uint32_t init_arr = (uint32_t)(TIMER_CLK_HZ / m->current_speed) - 1;
+        uint32_t init_ccr = init_arr >> 1;
+        __HAL_TIM_SET_AUTORELOAD(m->htim, init_arr);
+        __HAL_TIM_SET_COMPARE(m->htim, m->channel, init_ccr);
+    }
+
     /* 无条件启动 PWM (HAL_TIM_PWM_Start 幂等, 重复调用无害) */
     HAL_TIM_PWM_Start(m->htim, m->channel);
 }
 
-/* 软停止: CCR=0, 等脉冲完结后关定时器 ----------------------------- */
+/* 软停止: CCR=0, 不关定时器 (对齐 Robot stepper.c 做法)
+ * CCR 预装载已开启, 写入的 0 会在当前脉冲周期结束时生效
+ * → 最后一个高电平完整输出后再停止, 不截断脉冲, 避免丢步 */
 void MotorCtrl_Stop(uint8_t motor_id)
 {
     if (motor_id > 1) return;
 
     MotorCtrl_t *m = &motor[motor_id];
 
-    if (m->state == STOP || m->state == STOP_PENDING) return;
-
+    if (m->state == STOP) return;
 
     __HAL_TIM_SET_COMPARE(m->htim, m->channel, 0);
-    m->state = STOP_PENDING;
-    m->pending_cnt = 0;
+    m->state = STOP;
     m->current_speed = 0.0f;
     m->current_accel = 0.0f;
 }
@@ -119,20 +125,6 @@ static void MotorCtrl_UpdateSingle(MotorCtrl_t *m)
     float target_speed, delta, d_abs;
     uint32_t arr, ccr;
     uint8_t id = (m == &motor[MOTOR_LEFT]) ? MOTOR_LEFT : MOTOR_RIGHT;
-
-    /* ---- STOP_PENDING: 等待当前脉冲完结后安全关断 ---- */
-    if (m->state == STOP_PENDING)
-    {
-        m->pending_cnt++;
-        /* 3ms 后安全关断 (覆盖最长周期: 1/MIN_SPEED ≈ 10ms 时脉冲
-         * 已因 CCR=0 而自然停止, 此处延后关定时器) */
-        if (m->pending_cnt >= 3)
-        {
-            HAL_TIM_PWM_Stop(m->htim, m->channel);
-            m->state = STOP;
-        }
-        return;
-    }
 
     if (m->state == STOP)
         return;
