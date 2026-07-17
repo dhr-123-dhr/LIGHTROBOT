@@ -21,7 +21,6 @@
 #include "tim.h"
 
 /* USER CODE BEGIN 0 */
-//电机的Stp脉冲两个，丝杆滑台一个，
 /* USER CODE END 0 */
 
 TIM_HandleTypeDef htim2;

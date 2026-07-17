@@ -30,6 +30,7 @@
 /* USER CODE BEGIN Includes */
 #include "Chassis.h"
 #include "MotorCtrl.h"
+#include "mpu6050.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -178,6 +179,15 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
+/* I2C1 DMA RX 完成回调 → MPU6050 数据就绪 */
+void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+    if (hi2c->Instance == I2C1)
+    {
+        MPU6050_OnDMAComplete();
+    }
+}
+
 /* USER CODE END 4 */
 
 /**
@@ -197,6 +207,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   {
     HAL_IncTick();
     MotorCtrl_Update();
+    chassis_tick();
   }
   /* USER CODE BEGIN Callback 1 */
 
